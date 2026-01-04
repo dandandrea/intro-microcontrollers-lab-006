@@ -1,4 +1,4 @@
-#include "Adafruit_MPU6050_counterfit.h"
+#include "Adafruit_MPU6050_counterfeit.h"
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 

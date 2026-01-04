@@ -35,7 +35,7 @@
 #include "Arduino.h"
 #include <Wire.h>
 
-#include "Adafruit_MPU6050_counterfit.h"
+#include "Adafruit_MPU6050_counterfeit.h"
 
 /*!
  *    @brief  Instantiates a new MPU6050 class
