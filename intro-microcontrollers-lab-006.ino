@@ -69,6 +69,7 @@ void setup() {
 
   oled.setTextSize(3);
   oled.clearDisplay();
+  oled.drawRect(0, 0, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS, WHITE);
   oled.display();
 
   Serial.println(F("[setup()] Done"));
@@ -95,12 +96,8 @@ void loop() {
       delay(50);
     }
 
-    // oled.clearDisplay();
-    // oled.setCursor(0, 16);
-    // oled.print(F(" CLEAR"));
-    // oled.display();
-    // delay(1000);
     oled.clearDisplay();
+    oled.drawRect(0, 0, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS, WHITE);
     oled.display();
   }
 
