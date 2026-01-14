@@ -13,7 +13,18 @@
 Adafruit_SSD1306 oled(OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS, &Wire, -1);
 Adafruit_MPU6050 mpu;
 
-#define Z_FORCE_TO_RESET_DISPLAY 25
+#define GAME_MAX_SECONDS 60
+#define TARGET_MATCH_THRESHOLD_PIXELS 5
+
+uint32_t score = 0;
+uint32_t gameStartMilliseconds = 0;
+uint8_t targetX = 0;
+uint8_t targetY = 0;
+
+void gameReset(bool flashScreen);
+void nextDotLocation();
+
+#define PLAY_AREA_OFFSET_HEIGHT_PIXELS 18
 
 void setup() {
   // put your setup code here, to run once:
@@ -67,10 +78,13 @@ void setup() {
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-  oled.setTextSize(3);
   oled.clearDisplay();
-  oled.drawRect(0, 0, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS, WHITE);
   oled.display();
+
+  randomSeed(analogRead(0));
+
+  nextDotLocation();
+  gameReset(false);
 
   Serial.println(F("[setup()] Done"));
 }
@@ -81,10 +95,59 @@ void loop() {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  int16_t x = a.acceleration.x * 10;
-  int16_t y = a.acceleration.y * 10;
+  int16_t x = a.acceleration.y;
+  int16_t y = a.acceleration.x;
 
-  if (a.acceleration.z >= Z_FORCE_TO_RESET_DISPLAY)
+  // ~ +/- 9.8 m/s^2 is a good enough metric for a full tilt on any axis
+  // Bound to [-10, 10] for convenience of mapping to OLED display's coordinate system
+  if (x > 10) x = 10;
+  if (x < -10) x = -10;
+  if (y > 10) y = 10;
+  if (y < -10) y = -10;
+
+  // Map x and y from [-10, 10] to [0, 20]
+  x = (x + 10);
+  y = (y + 10);
+
+  // Need to account for play area starting at Y pixel = 18
+
+  // Map X from [0, 20] to [0, 63 - 18] and y from [0, 20] to [0, 127] (minus 18 because we are not using the full height of the display for the play area)
+  x = x * 6.35; // 20 * 6.35 = 127
+  y = y * 2.25; // 20 * 2.25 = 45 = 63 - 18
+
+  int32_t secondsRemaining = GAME_MAX_SECONDS - ((millis() - gameStartMilliseconds) / 1000);
+
+  bool match = false;
+  if (abs(x - targetX) <= TARGET_MATCH_THRESHOLD_PIXELS && abs((y + PLAY_AREA_OFFSET_HEIGHT_PIXELS) - targetY) <= TARGET_MATCH_THRESHOLD_PIXELS) match = true;
+
+  if (match)
+  {
+    score++;
+    nextDotLocation();
+  }
+
+  if (secondsRemaining <= 0)
+  {
+    gameReset(true);
+    nextDotLocation();
+  }
+
+  oled.clearDisplay();
+  oled.drawRect(0, PLAY_AREA_OFFSET_HEIGHT_PIXELS, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS - PLAY_AREA_OFFSET_HEIGHT_PIXELS, WHITE);
+  oled.setCursor(0, 0);
+  oled.print(score);
+  oled.setCursor(OLED_WIDTH_PIXELS / 2, 0);
+  oled.print(secondsRemaining);
+  oled.drawCircle(x, y + PLAY_AREA_OFFSET_HEIGHT_PIXELS, 2, WHITE);
+  oled.drawCircle(targetX, targetY, 1, WHITE);
+  oled.display();
+
+  delay(5);
+}
+
+void gameReset(bool flashScreen)
+{
+  if (flashScreen)
   {
     for (uint16_t i = 0; i < 5; i++)
     {
@@ -95,22 +158,15 @@ void loop() {
       oled.display();
       delay(50);
     }
-
-    oled.clearDisplay();
-    oled.drawRect(0, 0, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS, WHITE);
-    oled.display();
   }
 
-  if (x > 100) x = 100;
-  if (x < -100) x = -100;
-  if (y > 100) y = 100;
-  if (y < -100) y = -100;
+  gameStartMilliseconds = millis();
+  score = 0;
+}
 
-  x = (x + 100) * 0.315;
-  y = (y + 100) * 0.635;
-
-  oled.writePixel(y, x, WHITE);
-  oled.display();
-
-  delay(5);
+void nextDotLocation()
+{
+  // +/- 2 so that we don't draw directly on the border
+  targetX = (uint8_t)random(2, OLED_WIDTH_PIXELS - 2);
+  targetY = (uint8_t)random(PLAY_AREA_OFFSET_HEIGHT_PIXELS + 2, OLED_HEIGHT_PIXELS - 2);
 }
