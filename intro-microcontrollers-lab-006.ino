@@ -21,8 +21,11 @@ uint32_t gameStartMilliseconds = 0;
 uint8_t targetX = 0;
 uint8_t targetY = 0;
 
+void flashScreenNTimes(uint16_t numFlashes);
 void gameReset(bool flashScreen);
 void nextDotLocation();
+int32_t getSecondsRemaining();
+void redrawMainScreenArea();
 
 #define PLAY_AREA_OFFSET_HEIGHT_PIXELS 18
 
@@ -95,8 +98,8 @@ void loop() {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  int16_t x = a.acceleration.y;
-  int16_t y = a.acceleration.x;
+  float x = a.acceleration.y;
+  float y = a.acceleration.x;
 
   // ~ +/- 9.8 m/s^2 is a good enough metric for a full tilt on any axis
   // Bound to [-10, 10] for convenience of mapping to OLED display's coordinate system
@@ -115,49 +118,70 @@ void loop() {
   x = x * 6.35; // 20 * 6.35 = 127
   y = y * 2.25; // 20 * 2.25 = 45 = 63 - 18
 
-  int32_t secondsRemaining = GAME_MAX_SECONDS - ((millis() - gameStartMilliseconds) / 1000);
+  int16_t xInt = x;
+  int16_t yInt = y;
 
-  bool match = false;
-  if (abs(x - targetX) <= TARGET_MATCH_THRESHOLD_PIXELS && abs((y + PLAY_AREA_OFFSET_HEIGHT_PIXELS) - targetY) <= TARGET_MATCH_THRESHOLD_PIXELS) match = true;
-
-  if (match)
-  {
-    score++;
-    nextDotLocation();
-  }
-
-  if (secondsRemaining <= 0)
-  {
-    gameReset(true);
-    nextDotLocation();
-  }
-
-  oled.clearDisplay();
-  oled.drawRect(0, PLAY_AREA_OFFSET_HEIGHT_PIXELS, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS - PLAY_AREA_OFFSET_HEIGHT_PIXELS, WHITE);
-  oled.setCursor(0, 0);
-  oled.print(score);
-  oled.setCursor(OLED_WIDTH_PIXELS / 2, 0);
-  oled.print(secondsRemaining);
-  oled.drawCircle(x, y + PLAY_AREA_OFFSET_HEIGHT_PIXELS, 2, WHITE);
+  redrawMainScreenArea();
+  oled.drawCircle(xInt, yInt + PLAY_AREA_OFFSET_HEIGHT_PIXELS, 2, WHITE);
   oled.drawCircle(targetX, targetY, 1, WHITE);
   oled.display();
 
-  delay(5);
+  bool match = false;
+  if (abs(xInt - targetX) <= TARGET_MATCH_THRESHOLD_PIXELS && abs((yInt + PLAY_AREA_OFFSET_HEIGHT_PIXELS) - targetY) <= TARGET_MATCH_THRESHOLD_PIXELS) match = true;
+
+  if (match)
+  {
+    flashScreenNTimes(3);
+    score++;
+    nextDotLocation();
+
+    redrawMainScreenArea();
+    oled.drawCircle(xInt, yInt + PLAY_AREA_OFFSET_HEIGHT_PIXELS, 2, WHITE);
+    oled.drawCircle(targetX, targetY, 1, WHITE);
+    oled.display();
+  }
+
+  if (getSecondsRemaining() <= 0)
+  {
+    gameReset(true);
+    nextDotLocation();
+
+    redrawMainScreenArea();
+    oled.drawCircle(xInt, yInt + PLAY_AREA_OFFSET_HEIGHT_PIXELS, 2, WHITE);
+    oled.drawCircle(targetX, targetY, 1, WHITE);
+    oled.display();
+  }
+}
+
+void flashScreenNTimes(uint16_t numFlashes)
+{
+  for (uint16_t i = 0; i < numFlashes; i++)
+  {
+    oled.invertDisplay(true);
+    oled.display();
+    delay(50);
+    oled.invertDisplay(false);
+    oled.display();
+    delay(50);
+  }
 }
 
 void gameReset(bool flashScreen)
 {
   if (flashScreen)
   {
-    for (uint16_t i = 0; i < 5; i++)
-    {
-      oled.invertDisplay(true);
-      oled.display();
-      delay(50);
-      oled.invertDisplay(false);
-      oled.display();
-      delay(50);
-    }
+    flashScreenNTimes(10);
+
+    oled.clearDisplay();
+    oled.setTextColor(WHITE);
+    oled.setCursor(0, 16);
+    oled.println(F("Game Over"));
+    oled.println(F(""));
+    oled.print(F("Score: "));
+    oled.print(score);
+    oled.display();
+
+    delay(2500);
   }
 
   gameStartMilliseconds = millis();
@@ -169,4 +193,38 @@ void nextDotLocation()
   // +/- 2 so that we don't draw directly on the border
   targetX = (uint8_t)random(2, OLED_WIDTH_PIXELS - 2);
   targetY = (uint8_t)random(PLAY_AREA_OFFSET_HEIGHT_PIXELS + 2, OLED_HEIGHT_PIXELS - 2);
+
+  uint8_t verticalCrosshairX0 = targetX;
+  uint8_t verticalCrosshairY0 = PLAY_AREA_OFFSET_HEIGHT_PIXELS;
+
+  uint8_t verticalCrosshairX1 = targetX;
+  uint8_t verticalCrosshairY1 = OLED_HEIGHT_PIXELS;
+
+  uint8_t horizontalCrosshairX0 = 0;
+  uint8_t horizontalCrosshairY0 = targetY;
+
+  uint8_t horizontalCrosshairX1 = OLED_WIDTH_PIXELS;
+  uint8_t horizontalCrosshairY1 = targetY;
+
+  redrawMainScreenArea();
+  oled.drawLine(verticalCrosshairX0, verticalCrosshairY0, verticalCrosshairX1, verticalCrosshairY1, WHITE);
+  oled.drawLine(horizontalCrosshairX0, horizontalCrosshairY0, horizontalCrosshairX1, horizontalCrosshairY1, WHITE);
+  oled.display();
+
+  delay(500);
+}
+
+void redrawMainScreenArea()
+{
+  oled.clearDisplay();
+  oled.drawRect(0, PLAY_AREA_OFFSET_HEIGHT_PIXELS, OLED_WIDTH_PIXELS, OLED_HEIGHT_PIXELS - PLAY_AREA_OFFSET_HEIGHT_PIXELS, WHITE);
+  oled.setCursor(0, 0);
+  oled.print(score);
+  oled.setCursor(OLED_WIDTH_PIXELS / 2, 0);
+  oled.print(getSecondsRemaining());
+}
+
+int32_t getSecondsRemaining()
+{
+  return GAME_MAX_SECONDS - ((millis() - gameStartMilliseconds) / 1000);
 }
