@@ -79,8 +79,8 @@ void loop() {
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  float x = a.acceleration.y;
-  float y = a.acceleration.x;
+  float x = a.acceleration.y * -1;
+  float y = a.acceleration.x * -1;
 
   // ~ +/- 9.8 m/s^2 is a good enough metric for a full tilt on any axis
   // Bound to [-10, 10] for convenience of mapping to OLED display's coordinate system
